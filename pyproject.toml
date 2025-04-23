@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "topusers"
+version = "0.1.0"
+description = "CLI helpers for monthly SLURM user statistics on LRZ HPC"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+
+[project.scripts]
+topusers = "topusers.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+

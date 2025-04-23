@@ -9,7 +9,6 @@ Entry point for the *topusers* command with three sub-commands:
 from __future__ import annotations
 import argparse
 import datetime as dt
-import grp
 import os
 import subprocess
 import sys
@@ -26,9 +25,24 @@ def write_kv_file(path: Path, usage: Dict[str, int]) -> None:
             fh.write(f"{user} {secs}\n")
 
 
-# --------------------------------------------------------------------------- #
-#  sub-command: monthly
-# --------------------------------------------------------------------------- #
+def read_mcml_file(path: str) -> list[str]:
+    """
+    Read one MCML project ID per line, skip blank lines.
+    """
+    with open(path, 'r', encoding='utf-8') as f:
+        return [line.strip() for line in f if line.strip()]
+
+
+def user_groups(user: str) -> set[str]:
+    """Return all group names a user belongs to (primary + supplementary)."""
+    try:
+        out = subprocess.check_output(["id", "-Gn", user], text=True)
+        return set(out.strip().split())
+    except subprocess.CalledProcessError:
+        # user not found or error querying groups; treat as no groups
+        return set()
+
+
 def cmd_monthly(args: argparse.Namespace) -> None:
     outdir = Path(args.outdir).expanduser()
     outdir.mkdir(parents=True, exist_ok=True)
@@ -41,9 +55,6 @@ def cmd_monthly(args: argparse.Namespace) -> None:
         sys.stderr.write("done\n")
 
 
-# --------------------------------------------------------------------------- #
-#  sub-command: aggregate
-# --------------------------------------------------------------------------- #
 def cmd_aggregate(args: argparse.Namespace) -> None:
     total: Dict[str, int] = {}
     datadir = Path(args.datadir).expanduser()
@@ -57,18 +68,12 @@ def cmd_aggregate(args: argparse.Namespace) -> None:
     sys.stderr.write(f"[aggregate] wrote {args.ofile}\n")
 
 
-# --------------------------------------------------------------------------- #
-#  sub-command: nomcml
-# --------------------------------------------------------------------------- #
-def user_groups(user: str) -> set[str]:
-    """Return all group names a user belongs to (primary + supplementary)."""
-    # id -Gn works reliably in LDAP-backed environments
-    out = subprocess.check_output(["id", "-Gn", user], text=True)
-    return set(out.strip().split())
-
-
 def cmd_nomcml(args: argparse.Namespace) -> None:
-    mcml = set(args.mcmlprojects.split(","))
+    # unify mcml project IDs from either a comma-list or a file
+    if getattr(args, 'mcmlfile', None):
+        mcml = set(read_mcml_file(args.mcmlfile))
+    else:
+        mcml = set(args.mcmlprojects.split(","))
     keep: Dict[str, int] = {}
 
     for line in Path(args.ifile).read_text().splitlines():
@@ -80,9 +85,6 @@ def cmd_nomcml(args: argparse.Namespace) -> None:
     sys.stderr.write(f"[nomcml] wrote {args.ofile}\n")
 
 
-# --------------------------------------------------------------------------- #
-#  dispatcher
-# --------------------------------------------------------------------------- #
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="topusers", description="LRZ SLURM usage helpers")
     sub = p.add_subparsers(dest="command", required=True)
@@ -103,15 +105,23 @@ def build_parser() -> argparse.ArgumentParser:
 
     # nomcml
     pn = sub.add_parser("nomcml", help="filter out MCML-affiliated users")
-    pn.add_argument("--ifile",        required=True, help="aggregated per-user stats to filter")
-    pn.add_argument("--mcmlprojects", required=True, help="comma-separated list of MCML group names")
-    pn.add_argument("--ofile",        required=True, help="output file after filtering")
+    pn.add_argument("--ifile", required=True, help="aggregated per-user stats to filter")
+    grp = pn.add_mutually_exclusive_group(required=True)
+    grp.add_argument(
+        "--mcmlprojects",
+        help="comma-separated list of MCML group names (e.g. abc123,def456)"
+    )
+    grp.add_argument(
+        "--mcmlfile",
+        help="path to file with one MCML group name per line"
+    )
+    pn.add_argument("--ofile", required=True, help="output file after filtering")
     pn.set_defaults(func=cmd_nomcml)
 
     return p
 
 
-def main(argv: list[str] | None = None) -> None:  # noqa: D401
+def main(argv: list[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
     args.func(args)
 

@@ -2,6 +2,19 @@
 
 CLI helpers for querying **SLURM accounting** data on LRZ HPC clusters and producing per-user CPU‑time statistics.
 
+### 4 · Enrich with user data
+
+```bash
+topusers enrich \
+  --ifile all_users_nomcml.txt \   # two-column input (user and measure)
+  --ofile enriched_list_of_topusers.csv  # output CSV with user details
+```
+
+This command reads the input two-column file, fetches each user’s JSON record from the SIM API (`https://simapi.sim.lrz.de/user/<user>`) using `curl --netrc-file ~/.netrc`, and writes a CSV with columns:
+  - `user` (ID)
+  - `measure` (original second column)
+  - Additional user fields extracted from the JSON response (e.g. name, email, department).
+
 ---
 
 ## Installation

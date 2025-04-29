@@ -114,7 +114,7 @@ def cmd_enrich(args: argparse.Namespace) -> None:
     outfile = Path(args.ofile).expanduser()
     rows: list[dict] = []
     # Define fixed CSV columns
-    fieldnames = ["user", "measure", "emailadressen", "Vorname", "Nachname", "geschlecht", "status"]
+    fieldnames = ["user", "measure", "Email address", "Vorname", "Nachname", "geschlecht", "status"]
     netrc = os.path.expanduser("~/.netrc")
     for line in infile.read_text().splitlines():
         if not line.strip():
@@ -161,12 +161,26 @@ def cmd_enrich(args: argparse.Namespace) -> None:
             email_list.append(str(raw_emails))
         # remove duplicates while preserving order
         email_list = list(dict.fromkeys(email_list))
-        email_str = ",".join(email_list)
+        # Select a single email per user
+        first_name = details.get("vorname", "").lower()
+        last_name = details.get("nachname", "").lower()
+        selected_email = ""
+        if email_list:
+            if first_name and last_name:
+                for email_addr in email_list:
+                    email_lower = email_addr.lower()
+                    if first_name in email_lower and last_name in email_lower:
+                        selected_email = email_addr
+                        break
+                else:
+                    selected_email = email_list[0]
+            else:
+                selected_email = email_list[0]
         # Build row with fixed columns
         row = {
             "user": user,
             "measure": measure,
-            "emailadressen": email_str,
+            "Email address": selected_email,
             "Vorname": details.get("vorname", ""),
             "Nachname": details.get("nachname", ""),
             "geschlecht": details.get("geschlecht", ""),

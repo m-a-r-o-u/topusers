@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-Entry point for the *topusers* command with three sub-commands:
+Entry point for the *topusers* command with four sub-commands:
 
     topusers monthly   …
     topusers aggregate …
-    topusers nomcml    …
+    topusers nomcml    … (legacy: filter out MCML-affiliated users)
+    topusers mcml       … filter users based on MCML affiliation (keep or drop)
 """
 from __future__ import annotations
 import argparse
@@ -86,6 +87,26 @@ def cmd_nomcml(args: argparse.Namespace) -> None:
 
     write_kv_file(Path(args.ofile).expanduser(), keep)
     sys.stderr.write(f"[nomcml] wrote {args.ofile}\n")
+   
+def cmd_mcml(args: argparse.Namespace) -> None:
+    # unify mcml project IDs from either a comma-list or a file
+    if getattr(args, 'mcmlfile', None):
+        mcml = set(read_mcml_file(args.mcmlfile))
+    else:
+        mcml = set(args.mcmlprojects.split(','))
+    filtered: Dict[str, int] = {}
+
+    for line in Path(args.ifile).read_text().splitlines():
+        user, secs = line.split()
+        groups = user_groups(user)
+        if args.no and groups.isdisjoint(mcml):
+            filtered[user] = int(secs)
+        elif args.yes and not groups.isdisjoint(mcml):
+            filtered[user] = int(secs)
+
+    write_kv_file(Path(args.ofile).expanduser(), filtered)
+    mode = 'yes' if args.yes else 'no'
+    sys.stderr.write(f"[mcml {mode}] wrote {args.ofile}\n")
 
 def cmd_enrich(args: argparse.Namespace) -> None:
     """Fetch user details via SIM API and write CSV with input measure."""
@@ -199,6 +220,43 @@ def build_parser() -> argparse.ArgumentParser:
     )
     pn.add_argument("--ofile", required=True, help="output file after filtering")
     pn.set_defaults(func=cmd_nomcml)
+
+    # mcml: filter users based on MCML affiliation (keep or drop)
+    pmc = sub.add_parser(
+        "mcml",
+        help="filter users based on MCML affiliation (keep or drop)"
+    )
+    pmc.add_argument(
+        "--ifile",
+        required=True,
+        help="aggregated per-user stats to filter"
+    )
+    grp_proj2 = pmc.add_mutually_exclusive_group(required=True)
+    grp_proj2.add_argument(
+        "--mcmlprojects",
+        help="comma-separated list of MCML group names (e.g. abc123,def456)"
+    )
+    grp_proj2.add_argument(
+        "--mcmlfile",
+        help="path to file with one MCML group name per line"
+    )
+    grp_mode = pmc.add_mutually_exclusive_group(required=True)
+    grp_mode.add_argument(
+        "--yes",
+        action="store_true",
+        help="keep only MCML-affiliated users"
+    )
+    grp_mode.add_argument(
+        "--no",
+        action="store_true",
+        help="filter out MCML-affiliated users (like nomcml)"
+    )
+    pmc.add_argument(
+        "--ofile",
+        required=True,
+        help="output file after filtering"
+    )
+    pmc.set_defaults(func=cmd_mcml)
     
     # enrich: fetch user details from SIM API and output CSV
     pe = sub.add_parser(

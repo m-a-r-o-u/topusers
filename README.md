@@ -15,6 +15,17 @@ This command reads the input two-column file, fetches each user’s JSON record 
   - `measure` (original second column)
   - Additional user fields extracted from the JSON response (e.g. name, email, department).
 
+### 5 · Extract email addresses
+
+```bash
+topusers emails \
+  --ifile enriched_list_of_topusers.csv \   # CSV with an 'Email address' column
+  --ofile emails.txt \                     # output file for semicolon-separated list
+  -n 50                                    # number of top email addresses to extract
+```
+
+This command reads the enriched CSV (must include an 'Email address' column), filters out any email addresses whose domain contains "lrz", and writes the top N email addresses as a semicolon-separated list to the output file.
+
 ---
 
 ## Installation

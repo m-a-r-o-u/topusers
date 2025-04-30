@@ -200,6 +200,34 @@ def cmd_enrich(args: argparse.Namespace) -> None:
                 out_row[k] = v
             writer.writerow(out_row)
     sys.stderr.write(f"[enrich] wrote {outfile}\n")
+    
+def cmd_emails(args: argparse.Namespace) -> None:
+    """Extract top N email addresses from enriched CSV, skipping LRZ addresses."""
+    infile = Path(args.ifile).expanduser()
+    outfile = Path(args.ofile).expanduser()
+    emails: list[str] = []
+    # Read input CSV and collect emails
+    with infile.open('r', encoding='utf-8', newline='') as fh:
+        reader = csv.DictReader(fh)
+        if 'Email address' not in (reader.fieldnames or []):
+            sys.stderr.write("[emails] error: input file missing 'Email address' column\n")
+            sys.exit(1)
+        for row in reader:
+            email = (row.get('Email address') or '').strip()
+            if not email:
+                continue
+            # skip LRZ addresses (domain contains 'lrz')
+            parts = email.split('@', 1)
+            if len(parts) == 2 and 'lrz' in parts[1].lower():
+                continue
+            emails.append(email)
+            if len(emails) >= args.n:
+                break
+    # Write output as semicolon-separated list
+    with outfile.open('w', encoding='utf-8') as fh:
+        fh.write(';'.join(emails))
+        fh.write('\n')
+    sys.stderr.write(f"[emails] wrote {outfile}\n")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -288,6 +316,29 @@ def build_parser() -> argparse.ArgumentParser:
         help="output CSV file for enriched user data"
     )
     pe.set_defaults(func=cmd_enrich)
+    # emails: extract top-N email addresses from enriched CSV
+    pe2 = sub.add_parser(
+        "emails",
+        help="extract top N email addresses from enriched CSV, skipping LRZ addresses"
+    )
+    pe2.add_argument(
+        "--ifile",
+        required=True,
+        help="input CSV file with email addresses (must include 'Email address' column)"
+    )
+    pe2.add_argument(
+        "--ofile",
+        required=True,
+        help="output file for semicolon-separated email list"
+    )
+    pe2.add_argument(
+        "-n",
+        dest="n",
+        type=int,
+        required=True,
+        help="number of top email addresses to extract"
+    )
+    pe2.set_defaults(func=cmd_emails)
 
     return p
 

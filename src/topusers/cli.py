@@ -113,8 +113,8 @@ def cmd_enrich(args: argparse.Namespace) -> None:
     infile = Path(args.ifile).expanduser()
     outfile = Path(args.ofile).expanduser()
     rows: list[dict] = []
-    # Define fixed CSV columns
-    fieldnames = ["user", "measure", "Email address", "Vorname", "Nachname", "geschlecht", "status"]
+    # Define fixed CSV columns, include project ID per user
+    fieldnames = ["user", "measure", "Email address", "Vorname", "Nachname", "geschlecht", "status", "projekt"]
     netrc = os.path.expanduser("~/.netrc")
     for line in infile.read_text().splitlines():
         if not line.strip():
@@ -186,6 +186,8 @@ def cmd_enrich(args: argparse.Namespace) -> None:
             "geschlecht": details.get("geschlecht", ""),
             "status": data.get("status", ""),
         }
+        # include project ID from SIM API response
+        row["projekt"] = data.get("projekt", "")
         rows.append(row)
     # write CSV with fixed columns
     with outfile.open("w", encoding="utf-8", newline="") as fh:
@@ -228,6 +230,35 @@ def cmd_emails(args: argparse.Namespace) -> None:
         fh.write(';'.join(emails))
         fh.write('\n')
     sys.stderr.write(f"[emails] wrote {outfile}\n")
+   
+def cmd_aggregate_groups(args: argparse.Namespace) -> None:
+    """Sum measures per project from enriched CSV and write CSV."""
+    infile = Path(args.ifile).expanduser()
+    outfile = Path(args.ofile).expanduser()
+    totals: dict[str, int] = {}
+    # Read enriched CSV and accumulate measures per project
+    with infile.open('r', encoding='utf-8', newline='') as fh:
+        reader = csv.DictReader(fh)
+        # Ensure required columns
+        fn = reader.fieldnames or []
+        if 'projekt' not in fn or 'measure' not in fn:
+            sys.stderr.write("[aggregate_groups] error: input file missing 'projekt' or 'measure' column\n")
+            sys.exit(1)
+        for row in reader:
+            proj = (row.get('projekt') or '').strip()
+            val = row.get('measure', '').strip()
+            try:
+                m = int(val)
+            except ValueError:
+                m = 0
+            totals[proj] = totals.get(proj, 0) + m
+    # Write aggregated CSV
+    with outfile.open('w', encoding='utf-8', newline='') as fh:
+        writer = csv.writer(fh)
+        writer.writerow(['projekt', 'measure'])
+        for proj, m in sorted(totals.items()):
+            writer.writerow([proj, m])
+    sys.stderr.write(f"[aggregate_groups] wrote {outfile}\n")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -339,6 +370,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="number of top email addresses to extract"
     )
     pe2.set_defaults(func=cmd_emails)
+    # aggregate_groups: sum measures per project from enriched CSV
+    pag = sub.add_parser(
+        "aggregate_groups",
+        help="sum measures per project from enriched CSV"
+    )
+    pag.add_argument(
+        "--ifile",
+        required=True,
+        help="input enriched CSV file with 'projekt' and 'measure' columns"
+    )
+    pag.add_argument(
+        "--ofile",
+        required=True,
+        help="output CSV file for aggregated project measures"
+    )
+    pag.set_defaults(func=cmd_aggregate_groups)
 
     return p
 

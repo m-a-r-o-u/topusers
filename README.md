@@ -2,32 +2,6 @@
 
 CLI helpers for querying **SLURM accounting** data on LRZ HPC clusters and producing per-user CPU‑time statistics.
 
-### 4 · Enrich with user data
-
-```bash
-topusers enrich \
-  --ifile all_users_nomcml.txt \   # two-column input (user and measure)
-  --ofile enriched_list_of_topusers.csv  # output CSV with user details
-```
-
-This command reads the input two-column file, fetches each user’s JSON record from the SIM API (`https://simapi.sim.lrz.de/user/<user>`) using `curl --netrc-file ~/.netrc`, and writes a CSV with columns:
-  - `user` (ID)
-  - `measure` (original second column)
-  - Additional user fields extracted from the JSON response (e.g. name, email, department).
-
-### 5 · Extract email addresses
-
-```bash
-topusers emails \
-  --ifile enriched_list_of_topusers.csv \   # CSV with an 'Email address' column
-  --ofile emails.txt \                     # output file for semicolon-separated list
-  -n 50                                    # number of top email addresses to extract
-```
-
-This command reads the enriched CSV (must include an 'Email address' column), filters out any email addresses whose domain contains "lrz", and writes the top N email addresses as a semicolon-separated list to the output file.
-
----
-
 ## Installation
 
 ```bash
@@ -89,6 +63,43 @@ topusers nomcml \
 Users whose UNIX group list intersects with any of the supplied project IDs (`abc123` or `def456` in the example) are excluded from the output file.
 
 The final `all_users_nomcml.txt` thus contains **only non‑MCML users** with their total CPU‑time over the chosen period.
+
+### 4 · Enrich with user data
+
+```bash
+topusers enrich \
+  --ifile all_users_nomcml.txt \   # two-column input (user and measure)
+  --ofile enriched_list_of_topusers.csv  # output CSV with user details
+```
+
+This command reads the input two-column file, fetches each user’s JSON record from the SIM API (`https://simapi.sim.lrz.de/user/<user>`) using `curl --netrc-file ~/.netrc`, and writes a CSV with columns:
+  - `user` (ID)
+  - `measure` (original second column)
+  - Additional user fields extracted from the JSON response (e.g. name, email, department)
+  - `projekt` (project ID from the SIM API response)
+
+### 5 · Aggregate by project
+
+```bash
+topusers aggregate_groups \
+  --ifile enriched_list_of_topusers.csv \
+  --ofile enriched_list_of_topgroups.csv
+```
+
+This command reads the enriched CSV (must include `projekt` and `measure` columns), sums the integer `measure` values for each unique `projekt`, and writes a CSV with columns:
+  - `projekt` (project ID)
+  - `measure` (total sum of measures per project)
+
+### 6 · Extract email addresses
+
+```bash
+topusers emails \
+  --ifile enriched_list_of_topusers.csv \   # CSV with an 'Email address' column
+  --ofile emails.txt \                     # output file for semicolon-separated list
+  -n 50                                    # number of top email addresses to extract
+```
+
+This command reads the enriched CSV (must include an 'Email address' column), filters out any email addresses whose domain contains "lrz", and writes the top N email addresses as a semicolon-separated list to the output file.
 
 ---
 

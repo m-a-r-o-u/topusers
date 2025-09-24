@@ -14,7 +14,8 @@ from __future__ import annotations
 import datetime as dt
 import subprocess
 from collections import defaultdict
-from typing import Dict, Iterable, Iterator, Tuple
+from fnmatch import fnmatchcase
+from typing import Dict, Iterable, Iterator, Sequence, Tuple
 
 __all__ = [
     "month_bounds",
@@ -95,19 +96,41 @@ def run_sacct_iter(
 
 def aggregate_iter(
     lines: Iterable[str],
-    partition_prefix: str,
+    partition_filters: str | Sequence[str] | None,
     *,
     usage: Dict[str, int] | None = None,
 ) -> Dict[str, int]:
-    """Sum CPUTimeRAW seconds per user for partitions starting with *prefix*."""
+    """Sum CPUTimeRAW seconds per user filtered by *partition_filters*."""
     if usage is None:
         usage = defaultdict(int)
+
+    filters: list[str]
+    if partition_filters is None:
+        filters = []
+    elif isinstance(partition_filters, str):
+        filters = [partition_filters.strip()]
+    else:
+        filters = [str(flt).strip() for flt in partition_filters if str(flt).strip()]
+
+    def match(part: str) -> bool:
+        if not filters:
+            return True
+        for flt in filters:
+            if not flt:
+                continue
+            if any(ch in flt for ch in "*?[]"):
+                if fnmatchcase(part, flt):
+                    return True
+            elif part.startswith(flt):
+                return True
+        return False
+
     for ln in lines:
         # guard against empty / malformed rows
         if "|" not in ln:
             continue
         user, part, secs = ln.split("|", 2)
-        if part.startswith(partition_prefix) and user:
+        if match(part) and user:
             try:
                 usage[user] += int(secs)
             except ValueError:
@@ -131,7 +154,10 @@ def run_sacct(
     return "\n".join(run_sacct_iter(start, end, partition=partition, fields=fields))
 
 
-def aggregate_lines(lines: str, partition_prefix: str) -> Dict[str, int]:
+def aggregate_lines(
+    lines: str,
+    partition_filters: str | Sequence[str] | None,
+) -> Dict[str, int]:
     """Deprecated helper that keeps the old signature but uses streaming core."""
-    return aggregate_iter(lines.splitlines(), partition_prefix)
+    return aggregate_iter(lines.splitlines(), partition_filters)
 

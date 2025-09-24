@@ -16,7 +16,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Iterable
 
 from .sacct_tools import month_bounds, run_sacct, aggregate_lines
 import json
@@ -75,12 +75,25 @@ def user_groups(user: str) -> set[str]:
         return set()
 
 
+def parse_partition_filters(raw: str | Iterable[str] | None) -> list[str]:
+    """Split comma-separated partition filters and drop blanks."""
+    if raw is None:
+        return []
+    if isinstance(raw, str):
+        items = raw.split(",")
+    else:
+        items = list(raw)
+    return [item.strip() for item in items if item.strip()]
+
+
 def cmd_monthly(args: argparse.Namespace) -> None:
     outdir = Path(args.outdir).expanduser()
     outdir.mkdir(parents=True, exist_ok=True)
 
     start_spec: DateSpec = args.start
     end_spec: DateSpec | None = args.end
+
+    partition_filters = parse_partition_filters(args.partition)
 
     start = start_spec.value
     if end_spec is None:
@@ -101,8 +114,8 @@ def cmd_monthly(args: argparse.Namespace) -> None:
 
     for first, last in month_bounds(start, end):
         sys.stderr.write(f"[monthly] {first:%Y-%m} … ")
-        raw = run_sacct(first, last, partition=args.partition)
-        usage = aggregate_lines(raw, args.partition)
+        raw = run_sacct(first, last, partition=None)
+        usage = aggregate_lines(raw, partition_filters)
         write_kv_file(outdir / f"{first:%Y-%m}.txt", usage)
         sys.stderr.write("done\n")
 
@@ -326,7 +339,14 @@ def build_parser() -> argparse.ArgumentParser:
         type=parse_date_or_month,
         help="optional end date; accepts YYYY-MM-DD or YYYY-MM",
     )
-    pm.add_argument("--partition", default="lrz-hgx-h100-94x4", help="SLURM partition")
+    pm.add_argument(
+        "--partition",
+        default="lrz-hgx-h100-94x4",
+        help=(
+            "comma-separated partition filters (supports wildcards like 'lrz*'); "
+            "prefix matches without wildcards"
+        ),
+    )
     pm.add_argument("--outdir", default=".", help="output directory for YYYY-MM.txt files")
     pm.set_defaults(func=cmd_monthly)
 

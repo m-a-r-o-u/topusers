@@ -25,13 +25,15 @@ The workflow is split into three independent sub‑commands so that the heavy da
 topusers monthly \
   --start 2024-01 \      # month or full date (inclusive)
   --end   2024-12-31 \   # optional end (inclusive)
-  --partition lrz-hgx-h100-94x4 \   # SLURM partition to analyse
+  --partition lrz-dgx-a100-80x8,lrz-hgx-h100-94x4 \
+                       # comma-separated partitions (wildcards ok)
   --outdir stats          # save YYYY-MM.txt files here
 ```
 
 * For every month in the interval the command
   * calls `sacct` only for that month, avoiding out‑of‑memory errors,
-  * filters rows whose **Partition** equals `lrz-hgx-h100-94x4` (or any prefix you provide),
+  * filters rows whose **Partition** matches any of the supplied filters
+    (exact, prefix, or wildcard matches such as `lrz*`),
   * aggregates `CPUTimeRAW` seconds per user, and
   * writes `stats/2024-01.txt`, `stats/2024-02.txt`, …
 

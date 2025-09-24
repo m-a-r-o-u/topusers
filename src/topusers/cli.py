@@ -10,8 +10,11 @@ Entry point for the *topusers* command with four sub-commands:
 from __future__ import annotations
 import argparse
 import calendar
+import csv
 import datetime as dt
+import json
 import os
+import re
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -19,8 +22,6 @@ from pathlib import Path
 from typing import Dict, Iterable
 
 from .sacct_tools import month_bounds, run_sacct, aggregate_lines
-import json
-import csv
 
 
 @dataclass(frozen=True)
@@ -73,6 +74,22 @@ def user_groups(user: str) -> set[str]:
     except subprocess.CalledProcessError:
         # user not found or error querying groups; treat as no groups
         return set()
+
+
+def mcml_initiative(user: str) -> str:
+    """Return "mcml" if *user* has a secondary group ending with ai-h-mcml."""
+    try:
+        out = subprocess.check_output(["id", user], text=True)
+    except subprocess.CalledProcessError:
+        return ""
+    if "groups=" not in out:
+        return ""
+    groups_part = out.split("groups=", 1)[1]
+    names = re.findall(r"\(([^)]+)\)", groups_part)
+    for name in names[1:]:
+        if name.endswith("ai-h-mcml"):
+            return "mcml"
+    return ""
 
 
 def parse_partition_filters(raw: str | Iterable[str] | None) -> list[str]:
@@ -175,7 +192,7 @@ def cmd_enrich(args: argparse.Namespace) -> None:
     outfile = Path(args.ofile).expanduser()
     rows: list[dict] = []
     # Define fixed CSV columns, include project ID per user
-    fieldnames = ["user", "measure", "Email address", "Vorname", "Nachname", "geschlecht", "status", "projekt"]
+    fieldnames = ["user", "measure", "Email address", "Vorname", "Nachname", "geschlecht", "status", "projekt", "initiative"]
     netrc = os.path.expanduser("~/.netrc")
     for line in infile.read_text().splitlines():
         if not line.strip():
@@ -249,6 +266,7 @@ def cmd_enrich(args: argparse.Namespace) -> None:
         }
         # include project ID from SIM API response
         row["projekt"] = data.get("projekt", "")
+        row["initiative"] = mcml_initiative(user)
         rows.append(row)
     # write CSV with fixed columns
     with outfile.open("w", encoding="utf-8", newline="") as fh:

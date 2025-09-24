@@ -9,17 +9,45 @@ Entry point for the *topusers* command with four sub-commands:
 """
 from __future__ import annotations
 import argparse
+import calendar
 import datetime as dt
 import os
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict
 
 from .sacct_tools import month_bounds, run_sacct, aggregate_lines
 import json
 import csv
-import os
+
+
+@dataclass(frozen=True)
+class DateSpec:
+    value: dt.date
+    is_month: bool
+
+
+def parse_date_or_month(value: str) -> DateSpec:
+    """Parse *value* as YYYY-MM-DD or YYYY-MM and mark month-only inputs."""
+    try:
+        dt_value = dt.datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError:
+        try:
+            dt_value = dt.datetime.strptime(value, "%Y-%m").date()
+        except ValueError as exc:
+            raise argparse.ArgumentTypeError(
+                "expected YYYY-MM-DD or YYYY-MM"
+            ) from exc
+        return DateSpec(dt.date(dt_value.year, dt_value.month, 1), True)
+    return DateSpec(dt_value, False)
+
+
+def _end_of_month(day: dt.date) -> dt.date:
+    """Return the last day of the month that *day* falls into."""
+    last_day = calendar.monthrange(day.year, day.month)[1]
+    return day.replace(day=last_day)
 
 
 def write_kv_file(path: Path, usage: Dict[str, int]) -> None:
@@ -51,7 +79,27 @@ def cmd_monthly(args: argparse.Namespace) -> None:
     outdir = Path(args.outdir).expanduser()
     outdir.mkdir(parents=True, exist_ok=True)
 
-    for first, last in month_bounds(args.start, args.end):
+    start_spec: DateSpec = args.start
+    end_spec: DateSpec | None = args.end
+
+    start = start_spec.value
+    if end_spec is None:
+        if start_spec.is_month:
+            end = _end_of_month(start)
+            today = dt.date.today()
+            if start.year == today.year and start.month == today.month:
+                end = min(end, today)
+        else:
+            raise SystemExit("[monthly] --end is required when --start includes a day")
+    else:
+        end = end_spec.value
+        if end_spec.is_month:
+            end = _end_of_month(end)
+
+    if end < start:
+        raise SystemExit("[monthly] --end must not be before --start")
+
+    for first, last in month_bounds(start, end):
         sys.stderr.write(f"[monthly] {first:%Y-%m} … ")
         raw = run_sacct(first, last, partition=args.partition)
         usage = aggregate_lines(raw, args.partition)
@@ -267,8 +315,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     # monthly
     pm = sub.add_parser("monthly", help="collect monthly sacct stats")
-    pm.add_argument("--start", required=True, type=lambda s: dt.datetime.strptime(s, "%Y-%m-%d").date())
-    pm.add_argument("--end",   required=True, type=lambda s: dt.datetime.strptime(s, "%Y-%m-%d").date())
+    pm.add_argument(
+        "--start",
+        required=True,
+        type=parse_date_or_month,
+        help="start date (YYYY-MM-DD) or month (YYYY-MM)",
+    )
+    pm.add_argument(
+        "--end",
+        type=parse_date_or_month,
+        help="optional end date; accepts YYYY-MM-DD or YYYY-MM",
+    )
     pm.add_argument("--partition", default="lrz-hgx-h100-94x4", help="SLURM partition")
     pm.add_argument("--outdir", default=".", help="output directory for YYYY-MM.txt files")
     pm.set_defaults(func=cmd_monthly)

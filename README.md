@@ -23,8 +23,8 @@ The workflow is split into three independent sub‑commands so that the heavy da
 
 ```bash
 topusers monthly \
-  --start 2024-01-01 \   # first day (inclusive)
-  --end   2024-12-31 \   # last  day (inclusive)
+  --start 2024-01 \      # month or full date (inclusive)
+  --end   2024-12-31 \   # optional end (inclusive)
   --partition lrz-hgx-h100-94x4 \   # SLURM partition to analyse
   --outdir stats          # save YYYY-MM.txt files here
 ```
@@ -34,6 +34,11 @@ topusers monthly \
   * filters rows whose **Partition** equals `lrz-hgx-h100-94x4` (or any prefix you provide),
   * aggregates `CPUTimeRAW` seconds per user, and
   * writes `stats/2024-01.txt`, `stats/2024-02.txt`, …
+
+If you only pass a month (e.g. `--start 2024-08`) the command automatically
+processes that entire month. When the chosen month is still in progress, the
+end date is capped at “today” so that partial monthly data can be collected
+without specifying `--end`.
 
 Each of these text files contains two whitespace‑separated columns:
 

@@ -492,8 +492,8 @@ def build_parser() -> argparse.ArgumentParser:
         action="append",
         default=None,
         help=(
-            "regular expression for email addresses to include; can be provided "
-            "multiple times"
+            "regular expression for email addresses to include (e.g. "
+            "--include '.*@gmail\\.com$'); can be provided multiple times"
         ),
     )
     pe2.add_argument(
@@ -501,8 +501,8 @@ def build_parser() -> argparse.ArgumentParser:
         action="append",
         default=None,
         help=(
-            "regular expression for email addresses to exclude; can be provided "
-            "multiple times"
+            "regular expression for email addresses to exclude (e.g. "
+            "--exclude '.*@lrz\\.de$'); can be provided multiple times"
         ),
     )
     pe2.set_defaults(func=cmd_emails)

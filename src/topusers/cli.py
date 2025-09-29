@@ -283,10 +283,14 @@ def cmd_enrich(args: argparse.Namespace) -> None:
     sys.stderr.write(f"[enrich] wrote {outfile}\n")
     
 def cmd_emails(args: argparse.Namespace) -> None:
-    """Extract top N email addresses from enriched CSV, skipping LRZ addresses."""
+    """Extract top N (or all) email addresses from enriched CSV, skipping LRZ addresses."""
     infile = Path(args.ifile).expanduser()
     outfile = Path(args.ofile).expanduser()
     emails: list[str] = []
+    limit = getattr(args, "n", None)
+    if limit is not None and limit <= 0:
+        sys.stderr.write("[emails] error: -n must be a positive integer\n")
+        sys.exit(1)
     # Read input CSV and collect emails
     with infile.open('r', encoding='utf-8', newline='') as fh:
         reader = csv.DictReader(fh)
@@ -302,7 +306,7 @@ def cmd_emails(args: argparse.Namespace) -> None:
             if len(parts) == 2 and 'lrz' in parts[1].lower():
                 continue
             emails.append(email)
-            if len(emails) >= args.n:
+            if limit is not None and len(emails) >= limit:
                 break
     # Write output as semicolon-separated list
     with outfile.open('w', encoding='utf-8') as fh:
@@ -461,8 +465,7 @@ def build_parser() -> argparse.ArgumentParser:
         "-n",
         dest="n",
         type=int,
-        required=True,
-        help="number of top email addresses to extract"
+        help="number of top email addresses to extract (omit to include all)"
     )
     pe2.set_defaults(func=cmd_emails)
     # aggregate_groups: sum measures per project from enriched CSV

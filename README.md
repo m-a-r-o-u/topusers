@@ -103,10 +103,10 @@ This command reads the enriched CSV (must include `projekt` and `measure` column
 topusers emails \
   --ifile enriched_list_of_topusers.csv \   # CSV with an 'Email address' column
   --ofile emails.txt \                     # output file for semicolon-separated list
-  -n 50                                    # number of top email addresses to extract
+  -n 50                                    # optionally limit the number of addresses
 ```
 
-This command reads the enriched CSV (must include an 'Email address' column), filters out any email addresses whose domain contains "lrz", and writes the top N email addresses as a semicolon-separated list to the output file.
+This command reads the enriched CSV (must include an 'Email address' column), filters out any email addresses whose domain contains "lrz", and writes the email addresses as a semicolon-separated list to the output file. Include `-n` to limit the output to the first N addresses, or omit it to include them all.
 
 ---
 

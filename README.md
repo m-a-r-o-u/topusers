@@ -104,9 +104,13 @@ topusers emails \
   --ifile enriched_list_of_topusers.csv \   # CSV with an 'Email address' column
   --ofile emails.txt \                     # output file for semicolon-separated list
   -n 50                                    # optionally limit the number of addresses
+  --include '.*@gmail\.com$'              # optional regex filter(s)
+  --exclude '.*@lrz\.de$'                # optional regex filter(s)
 ```
 
 This command reads the enriched CSV (must include an 'Email address' column), filters out any email addresses whose domain contains "lrz", and writes the email addresses as a semicolon-separated list to the output file. Include `-n` to limit the output to the first N addresses, or omit it to include them all.
+
+Use `--include` to keep only addresses that match the supplied regular expression(s) (defaults to keeping all addresses) and `--exclude` to drop matches (defaults to dropping none). Provide the options multiple times when you need several rules, for example `--include '.*@(tum|lmu)\.de$'`.
 
 ---
 

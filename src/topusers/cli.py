@@ -282,12 +282,28 @@ def cmd_enrich(args: argparse.Namespace) -> None:
             writer.writerow(out_row)
     sys.stderr.write(f"[enrich] wrote {outfile}\n")
     
+def _compile_patterns(patterns: Iterable[str], label: str) -> list[re.Pattern[str]]:
+    """Return compiled regular expressions or exit with an error message."""
+    compiled: list[re.Pattern[str]] = []
+    for pattern in patterns:
+        try:
+            compiled.append(re.compile(pattern))
+        except re.error as exc:
+            sys.stderr.write(
+                f"[emails] error: invalid {label} pattern {pattern!r}: {exc}\n"
+            )
+            sys.exit(1)
+    return compiled
+
+
 def cmd_emails(args: argparse.Namespace) -> None:
-    """Extract top N (or all) email addresses from enriched CSV, skipping LRZ addresses."""
+    """Extract top N (or all) email addresses from enriched CSV, with optional filters."""
     infile = Path(args.ifile).expanduser()
     outfile = Path(args.ofile).expanduser()
     emails: list[str] = []
     limit = getattr(args, "n", None)
+    include_patterns = _compile_patterns(args.include or [], "include")
+    exclude_patterns = _compile_patterns(args.exclude or [], "exclude")
     if limit is not None and limit <= 0:
         sys.stderr.write("[emails] error: -n must be a positive integer\n")
         sys.exit(1)
@@ -304,6 +320,10 @@ def cmd_emails(args: argparse.Namespace) -> None:
             # skip LRZ addresses (domain contains 'lrz')
             parts = email.split('@', 1)
             if len(parts) == 2 and 'lrz' in parts[1].lower():
+                continue
+            if include_patterns and not any(p.search(email) for p in include_patterns):
+                continue
+            if any(p.search(email) for p in exclude_patterns):
                 continue
             emails.append(email)
             if limit is not None and len(emails) >= limit:
@@ -466,6 +486,24 @@ def build_parser() -> argparse.ArgumentParser:
         dest="n",
         type=int,
         help="number of top email addresses to extract (omit to include all)"
+    )
+    pe2.add_argument(
+        "--include",
+        action="append",
+        default=None,
+        help=(
+            "regular expression for email addresses to include; can be provided "
+            "multiple times"
+        ),
+    )
+    pe2.add_argument(
+        "--exclude",
+        action="append",
+        default=None,
+        help=(
+            "regular expression for email addresses to exclude; can be provided "
+            "multiple times"
+        ),
     )
     pe2.set_defaults(func=cmd_emails)
     # aggregate_groups: sum measures per project from enriched CSV
